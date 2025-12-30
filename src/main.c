@@ -38,12 +38,13 @@ void player_move(Rectangle *player, const PlayerControllerOptions options, const
 
 int main(void)
 {
-    InitWindow(800, 600, "Ray Tato Game in Raylib");
-    MaximizeWindow();
+    SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_MAXIMIZED);
+    InitWindow(0, 0, "Ray Tato Game in Raylib");
 
     SetTargetFPS(60);
 
-    srand(time(NULL));
+    int renderWidth = GetRenderWidth();
+    int renderHeight = GetRenderHeight();
 
     Rectangle player = {400, 280, 40, 40};
 
@@ -57,17 +58,15 @@ int main(void)
             },
     };
 
-    int screenWidth = GetScreenWidth();
-    int screenHeight = GetScreenHeight();
-
     Camera2D camera = {0};
     camera.target = (Vector2){player.x + player.width / 2.0f, player.y + player.height / 2.0f};
-    camera.offset = (Vector2){screenWidth / 2.0f, screenHeight / 2.0f};
+    camera.offset = (Vector2){renderWidth / 2.0f, renderHeight / 2.0f};
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
     while (!WindowShouldClose())
     {
+
         float dt = GetFrameTime();
 
         Vector2 direction = {0};
@@ -78,7 +77,7 @@ int main(void)
             direction.y = -speed * dt;
         else if (IsKeyDown(KEY_S))
             direction.y = speed * dt;
-        else if (IsKeyDown(KEY_D))
+        if (IsKeyDown(KEY_D))
             direction.x = speed * dt;
         else if (IsKeyDown(KEY_A))
             direction.x = -speed * dt;
