@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.feature": "json",
+        "*.h": "c",
+        "*.c": "c",
+        "random": "c",
+        "memory": "c",
+        "optional": "c"
+    }
+}
