@@ -1,0 +1,8 @@
+// .zed/tasks.json
+[
+    {
+        "label": "build",
+        "command": "./nob",
+        "use_new_terminal": true
+    }
+]

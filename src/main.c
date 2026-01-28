@@ -3,6 +3,51 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#include "stdbool.h"
+#include "stdint.h"
+
+typedef enum
+{
+    When_Tick_Ends_Restart = 1,
+    When_Tick_Ends_Keep = 0,
+} TickEndBehaviour;
+
+typedef struct
+{
+    uint16_t ms_to_trigger;
+    uint16_t ms_accumulated;
+} Accumulator;
+
+static Accumulator make_accumulator(uint16_t ms_to_trigger)
+{
+    Accumulator accumulator = {
+        .ms_to_trigger = ms_to_trigger,
+        .ms_accumulated = 0,
+    };
+    return accumulator;
+}
+
+static void accumulator_reset(Accumulator *accumulator)
+{
+    accumulator->ms_accumulated = 0;
+}
+
+static bool accumulator_tick(Accumulator *accumulator, float dt, TickEndBehaviour when_tick_ends)
+{
+    if (accumulator->ms_accumulated > accumulator->ms_to_trigger)
+    {
+        if (when_tick_ends == When_Tick_Ends_Restart)
+        {
+            accumulator->ms_accumulated = 0;
+        }
+        return true;
+    }
+
+    float add = dt * 1000.0;
+    accumulator->ms_accumulated += add;
+    return false;
+}
+
 typedef struct
 {
     Rectangle *player;
@@ -37,7 +82,6 @@ static void player_move(PlayerControllerOptions *this, const Vector2 direction)
     this->player->y = new_position.y;
 }
 
-#define Entity_Id uint32_t
 typedef struct
 {
     size_t health;
@@ -60,10 +104,14 @@ typedef struct
     AWave *items;
     size_t count;
     size_t capacity;
-    size_t current;
 } Waves;
 
-bool is_wave_over(AWave *wave)
+typedef struct {
+    Waves waves;
+    size_t current;
+} WavesManager;
+
+static bool is_wave_over(AWave *wave)
 {
     nob_da_foreach(Enemy, it, wave)
     {
@@ -82,7 +130,9 @@ static Enemy wave_1_enemies[] = {
 };
 
 static Enemy wave_2_enemies[] = {
-    {.health = 1},
+    {
+        .health = 1,
+    },
     {
         .health = 1,
     },
@@ -97,6 +147,43 @@ static Enemy wave_3_enemies[] = {
     },
 };
 
+typedef enum {
+    WAVE_GOING,
+    WAVE_TRANSITION,
+    WAVE_DONE,
+} WaveResult;
+
+static WaveResult waves_update(WavesManager *this)
+{
+    Waves *waves = &this->waves;
+    AWave *wave = &waves->items[this->current];
+
+    if (!is_wave_over(wave))
+    {
+        return WAVE_GOING;
+    }
+
+    if ((this->current + 1) == waves->count)
+    {
+        return WAVE_DONE;
+    }
+
+    this->current++;
+    return WAVE_TRANSITION;
+}
+
+static AWave* waves_get_current(WavesManager *this)
+{
+    Waves *waves = &this->waves;
+    AWave *wave = &waves->items[this->current];
+
+    return wave;
+}
+
+typedef struct {
+   bool in_transition;
+}  GameState;
+
 int main(void)
 {
     SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_MAXIMIZED);
@@ -106,6 +193,10 @@ int main(void)
 
     int renderWidth = GetRenderWidth();
     int renderHeight = GetRenderHeight();
+
+    GameState state = {
+        .in_transition = false
+    };
 
     Rectangle player = {400, 280, 40, 40};
 
@@ -134,54 +225,76 @@ int main(void)
         nob_da_append(&waves, (AWave)make_wave(wave_3_enemies));
     };
 
+    WavesManager waves_manager = {
+        .waves = waves,
+        .current = 0,
+    };
+
+    Accumulator accumulator = make_accumulator(5000);
+
     Nob_String_Builder sb = {0};
 
     while (!WindowShouldClose())
     {
         float dt = GetFrameTime();
 
-        Vector2 direction = {0};
-
-        const int16_t speed = 300;
-
-        if (IsKeyDown(KEY_W))
-            direction.y = -speed * dt;
-        else if (IsKeyDown(KEY_S))
-            direction.y = speed * dt;
-        if (IsKeyDown(KEY_D))
-            direction.x = speed * dt;
-        else if (IsKeyDown(KEY_A))
-            direction.x = -speed * dt;
-
-        player_move(&controller_options, direction);
-
-        AWave *wave = &waves.items[waves.current];
-
-        if (IsKeyPressed(KEY_SPACE))
+        if (state.in_transition)
         {
-            nob_da_foreach(Enemy, it, wave)
+            if (accumulator_tick(&accumulator, dt, When_Tick_Ends_Restart))
             {
-                if (it->health > 0)
+                state.in_transition = false;
+            }
+        }
+        else
+        {
+            Vector2 direction = {0};
+
+            const int16_t speed = 300;
+
+            if (IsKeyDown(KEY_W))
+                direction.y = -speed * dt;
+            else if (IsKeyDown(KEY_S))
+                direction.y = speed * dt;
+            if (IsKeyDown(KEY_D))
+                direction.x = speed * dt;
+            else if (IsKeyDown(KEY_A))
+                direction.x = -speed * dt;
+
+            player_move(&controller_options, direction);
+            camera.target = (Vector2){player.x + player.width / 2.0f, player.y + player.height / 2.0f};
+
+            AWave *wave = waves_get_current(&waves_manager);
+
+            if (IsKeyPressed(KEY_SPACE))
+            {
+                nob_da_foreach(Enemy, it, wave)
                 {
-                    it->health = 0;
-                    break;
+                    if (it->health > 0)
+                    {
+                        it->health = 0;
+                        break;
+                    }
+                }
+            }
+
+            {
+                WaveResult result = waves_update(&waves_manager);
+                if (result == WAVE_TRANSITION)
+                {
+                    accumulator_reset(&accumulator);
+                    state.in_transition = true;
                 }
             }
         }
-
-        if (is_wave_over(wave))
-        {
-            waves.current++;
-        }
-
-        camera.target = (Vector2){player.x + player.width / 2.0f, player.y + player.height / 2.0f};
 
         BeginDrawing();
         {
             ClearBackground(BLACK);
 
             sb.count = 0;
-            nob_sb_appendf(&sb, "Wave: %zu\n", waves.current);
+            nob_sb_appendf(&sb, "Wave: %zu\n", waves_manager.current);
+
+            AWave *wave = waves_get_current(&waves_manager);
 
             nob_da_foreach(Enemy, it, wave)
             {
@@ -197,6 +310,11 @@ int main(void)
 
             nob_sb_append_null(&sb);
             DrawText(sb.items, 100, 100, 15, WHITE);
+
+            if (state.in_transition)
+            {
+                DrawText("TRANSITION", 200, 200, 25, WHITE);
+            }
 
             BeginMode2D(camera);
             {
