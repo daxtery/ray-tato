@@ -147,13 +147,76 @@ static Enemy wave_3_enemies[] = {
     },
 };
 
+static Enemy wave_4_enemies[] = {
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+};
+
+static Enemy wave_5_enemies[] = {
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+};
+
+static Enemy wave_6_enemies[] = {
+    {
+        .health = 1,
+    },
+};
+
+static Enemy wave_7_enemies[] = {
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+};
+
+static Enemy wave_8_enemies[] = {
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+    {
+        .health = 1,
+    },
+};
+
+static Enemy wave_9_enemies[] = {
+    {
+        .health = 1,
+    }
+};
+
+static Enemy wave_10_enemies[] = {
+    {
+        .health = 1,
+    }
+};
+
 typedef enum {
     WAVE_GOING,
-    WAVE_TRANSITION,
-    WAVE_DONE,
-} WaveResult;
+    WAVES_TRANSITION,
+    WAVES_DONE,
+} WavesResult;
 
-static WaveResult waves_update(WavesManager *this)
+static WavesResult waves_update(WavesManager *this)
 {
     Waves *waves = &this->waves;
     AWave *wave = &waves->items[this->current];
@@ -165,11 +228,10 @@ static WaveResult waves_update(WavesManager *this)
 
     if ((this->current + 1) == waves->count)
     {
-        return WAVE_DONE;
+        return WAVES_DONE;
     }
 
-    this->current++;
-    return WAVE_TRANSITION;
+    return WAVES_TRANSITION;
 }
 
 static AWave* waves_get_current(WavesManager *this)
@@ -181,7 +243,7 @@ static AWave* waves_get_current(WavesManager *this)
 }
 
 typedef struct {
-   bool in_transition;
+   bool in_save_transition;
 }  GameState;
 
 int main(void)
@@ -195,7 +257,7 @@ int main(void)
     int renderHeight = GetRenderHeight();
 
     GameState state = {
-        .in_transition = false
+        .in_save_transition = false
     };
 
     Rectangle player = {400, 280, 40, 40};
@@ -223,6 +285,13 @@ int main(void)
         nob_da_append(&waves, (AWave)make_wave(wave_1_enemies));
         nob_da_append(&waves, (AWave)make_wave(wave_2_enemies));
         nob_da_append(&waves, (AWave)make_wave(wave_3_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_4_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_5_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_6_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_7_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_8_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_9_enemies));
+        nob_da_append(&waves, (AWave)make_wave(wave_10_enemies));
     };
 
     WavesManager waves_manager = {
@@ -230,19 +299,26 @@ int main(void)
         .current = 0,
     };
 
-    Accumulator accumulator = make_accumulator(5000);
+    Accumulator accumulator = make_accumulator(100);
 
     Nob_String_Builder sb = {0};
+
+    // TODO:
+    // Option B — Upgrade selection hook (no upgrades yet)
+    // Empty screen
+    // Placeholder choice
+    // No effects applied
 
     while (!WindowShouldClose())
     {
         float dt = GetFrameTime();
 
-        if (state.in_transition)
+        if (state.in_save_transition)
         {
             if (accumulator_tick(&accumulator, dt, When_Tick_Ends_Restart))
             {
-                state.in_transition = false;
+                state.in_save_transition = false;
+                waves_manager.current++;
             }
         }
         else
@@ -278,11 +354,11 @@ int main(void)
             }
 
             {
-                WaveResult result = waves_update(&waves_manager);
-                if (result == WAVE_TRANSITION)
+                WavesResult result = waves_update(&waves_manager);
+                if (result == WAVES_TRANSITION)
                 {
                     accumulator_reset(&accumulator);
-                    state.in_transition = true;
+                    state.in_save_transition = true;
                 }
             }
         }
@@ -292,7 +368,7 @@ int main(void)
             ClearBackground(BLACK);
 
             sb.count = 0;
-            nob_sb_appendf(&sb, "Wave: %zu\n", waves_manager.current);
+            nob_sb_appendf(&sb, "Wave: %zu/%zu\n", waves_manager.current + 1, waves_manager.waves.count);
 
             AWave *wave = waves_get_current(&waves_manager);
 
@@ -311,7 +387,7 @@ int main(void)
             nob_sb_append_null(&sb);
             DrawText(sb.items, 100, 100, 15, WHITE);
 
-            if (state.in_transition)
+            if (state.in_save_transition)
             {
                 DrawText("TRANSITION", 200, 200, 25, WHITE);
             }
